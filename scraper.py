@@ -1,24 +1,51 @@
-# This is a template for a Python scraper on morph.io (https://morph.io)
-# including some code snippets below that you should find helpful
+import requests
+import json
+import selenium
+import pandas as pd
+from tqdm import tqdm
+from urllib.request import urlopen
+import re
+from bs4 import BeautifulSoup
+url = "https://www.armadale.wa.gov.au/community-consultation"
+page = urlopen(url)
+html_bytes = page.read()
+html = html_bytes.decode("utf-8")
+soup = BeautifulSoup(html)
 
-# import scraperwiki
-# import lxml.html
-#
-# # Read in a page
-# html = scraperwiki.scrape("http://foo.com")
-#
-# # Find something on the page using css selectors
-# root = lxml.html.fromstring(html)
-# root.cssselect("div[align='left']")
-#
-# # Write out to the sqlite database using scraperwiki library
-# scraperwiki.sqlite.save(unique_keys=['name'], data={"name": "susan", "occupation": "software developer"})
-#
-# # An arbitrary query against the database
-# scraperwiki.sql.select("* from data where 'name'='peter'")
+results = []
+for table in soup.findAll('table',{'class':'views-table cols-2'}):
+    label = table.find('h3').get_text()
+    links = table.find_all('a')
+    for link in links:
+        title = link.get_text()
+        link=link['href']
 
-# You don't have to do things with the ScraperWiki and lxml libraries.
-# You can use whatever libraries you want: https://morph.io/documentation/python
-# All that matters is that your final data is written to an SQLite database
-# called "data.sqlite" in the current working directory which has at least a table
-# called "data".
+        if link[0]!='h':link='https://www.armadale.wa.gov.au'+link
+        page = urlopen(link)
+        html_bytes = page.read()
+        html = html_bytes.decode("utf-8")
+        soup2 = BeautifulSoup(html)
+        description = []
+        try:
+            temp = soup2.find('div', {'class':"truncated-description"})
+            temp.find_all('p')
+            description=[i.get_text() for i in temp.find_all('p')]
+            try:
+                description=description+[i.get_text() for i in temp.find_all('li')]
+            except:pass
+        except:
+            try:
+                temp = soup2.find('div', {'class':"field-item even"})
+                temp.find_all('p')
+                description=[i.get_text() for i in temp.find_all('p')]
+                try:
+                    description=description+[i.get_text() for i in temp.find_all('li')]
+                except:pass
+            except:
+                pass
+        results.extend([[title,label,link,description]])
+
+
+df=pd.DataFrame(results,columns=["title","label", "link","description"])
+df = df.replace('\n','', regex=True).replace(r'\s+', ' ', regex=True)
+df.to_csv("Armadale.csv",index=False)
